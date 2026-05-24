@@ -1,0 +1,45 @@
+{
+  "name": "@npv12/opencode-recap",
+  "version": "0.1.0",
+  "description": "OpenCode TUI sidebar plugin for session recap generation",
+  "type": "module",
+  "exports": {
+    "./tui": "./dist/tui.tsx"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && mkdir -p dist && cp index.ts dist/tui.tsx",
+    "pack:dry": "npm pack --dry-run",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "sidebar",
+    "recap",
+    "summary"
+  ],
+  "author": "npv12",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/npv12/opencode-memory-md.git",
+    "directory": "opencode-recap"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "opencode": ">=1.4.3"
+  },
+  "dependencies": {
+    "@npv12/opencode-recap": "^0.1.0",
+    "@opencode-ai/plugin": "^1.4.3",
+    "@opentui/core": "^0.2.2",
+    "@opentui/solid": "^0.2.2",
+    "solid-js": "^1.9.12"
+  }
+}
