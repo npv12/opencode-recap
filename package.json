@@ -1,6 +1,6 @@
 {
   "name": "@npv12/opencode-recap",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "OpenCode TUI sidebar plugin for session recap generation",
   "type": "module",
   "exports": {
@@ -33,13 +33,12 @@
     "access": "public"
   },
   "engines": {
-    "opencode": ">=1.4.3"
+    "opencode": ">=1.17.16"
   },
   "dependencies": {
-    "@npv12/opencode-recap": "^0.1.0",
-    "@opencode-ai/plugin": "^1.4.3",
-    "@opentui/core": "^0.2.2",
-    "@opentui/solid": "^0.2.2",
-    "solid-js": "^1.9.12"
+    "@opencode-ai/plugin": "^1.17.16",
+    "@opentui/core": "^0.4.3",
+    "@opentui/solid": "^0.4.3",
+    "solid-js": "^1.9.14"
   }
 }
