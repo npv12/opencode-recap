@@ -21,7 +21,7 @@
   ],
   "exports": {
     ".": "./dist/index.js",
-    "./tui": "./src/tui.tsx"
+    "./tui": "./dist/tui.js"
   },
   "files": [
     "dist",
@@ -34,6 +34,7 @@
   },
   "scripts": {
     "build": "bun scripts/build.ts",
+    "build:watch": "bun --watch scripts/build.ts",
     "check": "bun run typecheck && bun run test",
     "prepack": "bun run build",
     "typecheck": "tsc --noEmit",
