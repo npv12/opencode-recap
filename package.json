@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "@npv12/opencode-recap",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "description": "Sidebar session recaps for the OpenCode V2 TUI",
   "type": "module",
   "license": "MIT",
