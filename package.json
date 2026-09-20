@@ -41,10 +41,10 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@opencode-ai/plugin": "0.0.0-next-17271",
-    "@opentui/core": "0.0.0-20260808-9ecf7c0a",
-    "@opentui/solid": "0.5.1",
-    "solid-js": "1.9.14"
+    "@opencode/plugin": "2.0.10",
+    "@opentui/core": "0.5.11",
+    "@opentui/solid": "0.5.11",
+    "solid-js": "1.9.15"
   },
   "devDependencies": {
     "@tsconfig/bun": "1.0.9",

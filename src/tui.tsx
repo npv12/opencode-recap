@@ -12,7 +12,7 @@
  * entry file, so relative imports could load stale after edits.
  */
 
-import type { Plugin } from "@opencode-ai/plugin/tui";
+import type { Plugin } from "@opencode/plugin/tui";
 import { TextAttributes } from "@opentui/core";
 import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
 
@@ -133,9 +133,7 @@ async function generateWithRecapModel(
 ): Promise<string | undefined> {
   const info = context.data.session.get(sessionID);
   const rawLocation = info?.location;
-  const location = rawLocation
-    ? { directory: rawLocation.directory, workspace: rawLocation.workspaceID }
-    : undefined;
+  const location = rawLocation ? { directory: rawLocation.directory } : undefined;
   const transcript = recapTranscript(context, sessionID);
   if (!transcript) return undefined;
   // Typed locally: the pinned SDK build predates this endpoint.
@@ -427,9 +425,10 @@ function Controller(props: {
     // Primary live path for new input. Narrow cast: the pinned SDK build
     // predates this event's types — current v2 publishes it.
     type InboxData = { sessionID: string; item: { type: string } };
-    const stopInbox = props.context.data.on("session.inbox.enqueued" as never, (event: { data: InboxData }) => {
-      if (event.data.item.type !== "user") return;
-      newUserInput(event.data.sessionID);
+    const stopInbox = props.context.data.on("session.inbox.enqueued" as never, (event) => {
+      const data = (event as unknown as { data: InboxData }).data;
+      if (data.item.type !== "user") return;
+      newUserInput(data.sessionID);
     });
     const stopSteps = props.context.data.on("session.step.ended", (event) => {
       // Assistant steps are activity: they arm the cycle and count toward the
@@ -477,7 +476,7 @@ function View(props: { context: Plugin.Context; recap?: Recap }) {
     <box width="100%" paddingRight={1} paddingBottom={1}>
       <text
         attributes={TextAttributes.BOLD}
-        fg={props.context.theme.text.default}
+        fg={props.context.theme.text.base}
         onMouseUp={() => props.context.keymap.dispatch("session.recap")}
       >
         Recap
@@ -486,14 +485,14 @@ function View(props: { context: Plugin.Context; recap?: Recap }) {
       <Show
         when={props.recap?.loading}
         fallback={
-          <Show when={props.recap?.text} fallback={<text fg={props.context.theme.text.subdued}>Nothing yet</text>}>
-            <text wrapMode="word" fg={props.context.theme.text.subdued}>
+          <Show when={props.recap?.text} fallback={<text fg={props.context.theme.text.muted}>Nothing yet</text>}>
+            <text wrapMode="word" fg={props.context.theme.text.base}>
               {props.recap?.text}
             </text>
           </Show>
         }
       >
-        <text fg={props.context.theme.text.subdued}>{SPINNER_FRAMES[frame()]} Generating recap...</text>
+        <text fg={props.context.theme.text.muted}>{SPINNER_FRAMES[frame()]} Generating recap...</text>
         </Show>
       </box>
     </box>
@@ -509,7 +508,7 @@ export default {
     const [handled, updateHandled] = context.storage.store("recap-handled-v4", {
       initial: { sessions: {} as Record<string, HandledEntry> },
     });
-    context.ui.slot({
+    const disposeApp = context.ui.slot({
       append: "app",
       render: () => (
         <Controller
@@ -521,9 +520,13 @@ export default {
         />
       ),
     });
-    context.ui.slot({
+    const disposeSidebar = context.ui.slot({
       append: "sidebar.content",
       render: (props) => <View context={context} recap={state.sessions[props.sessionID]} />,
     });
+    return () => {
+      disposeApp();
+      disposeSidebar();
+    };
   },
 } satisfies Plugin.Definition;
