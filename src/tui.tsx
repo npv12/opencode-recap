@@ -48,7 +48,7 @@ export function autoRecapDue(
   return nowMs - state.anchorAtMs >= AUTO_RECAP_INTERVAL_MS;
 }
 
-const DEFAULT_RECAP_MODEL = { providerID: "opencode-go", id: "mimo-v2.5" } as const;
+const DEFAULT_RECAP_MODEL = { providerID: "openai", id: "gpt-5.6-luna", variant: "none" } as const;
 const RECAP_TIMEOUT_MS = 60_000;
 const AUTO_RETRY_COOLDOWN_MS = 2 * 60 * 1_000;
 const AUTO_MAX_CONSECUTIVE_FAILURES = 3;
@@ -57,9 +57,9 @@ const TRANSCRIPT_MAX_CHARS = 16_000;
 const RECAP_MAX_CHARS = 480;
 
 export type RecapOptions = {
-  /** Provider used for side-request recaps (default: opencode-go). */
+  /** Provider used for side-request recaps (default: openai). */
   providerID?: string;
-  /** Model used for side-request recaps (default: mimo-v2.5). */
+  /** Model used for side-request recaps (default: gpt-5.6-luna). */
   modelID?: string;
 };
 
@@ -78,6 +78,7 @@ function recapModel(options: Record<string, unknown>) {
   return {
     providerID: opts.providerID?.trim() || DEFAULT_RECAP_MODEL.providerID,
     id: opts.modelID?.trim() || DEFAULT_RECAP_MODEL.id,
+    variant: DEFAULT_RECAP_MODEL.variant,
   };
 }
 
@@ -128,7 +129,7 @@ function normalizeRecap(raw: string | undefined) {
 async function generateWithRecapModel(
   context: Plugin.Context,
   sessionID: string,
-  model: { providerID: string; id: string },
+  model: { providerID: string; id: string; variant?: string },
   signal: AbortSignal,
 ): Promise<string | undefined> {
   const info = context.data.session.get(sessionID);
@@ -364,22 +365,17 @@ function Controller(props: {
     };
 
     void (async () => {
-      // Preferred: dedicated recap model via the sessionless generate endpoint.
-      // Safe mid-turn — it never touches the running session.
+      // The dedicated endpoint keeps recap generation separate from the active session.
       try {
         const text = await generateWithRecapModel(props.context, sessionID, model, signal);
         if (superseded()) return;
         if (text !== undefined) return complete(text);
       } catch {
         if (superseded()) return;
-        // Unavailable model/endpoint: fall back below when the session is idle.
+        fail();
+        return;
       }
-      // Fallback: session-scoped generation with the session's own context and
-      // model. Requires an idle session; skip mid-turn rather than interfere.
-      if (props.context.data.session.status(sessionID) !== "idle") return fail();
-      const response = await props.context.client.session.generate({ sessionID, prompt: RECAP_PROMPT }, { signal });
-      if (superseded()) return;
-      complete(response.text);
+      fail();
     })()
       .catch(() => {
         if (superseded()) return;
@@ -486,7 +482,7 @@ function View(props: { context: Plugin.Context; recap?: Recap }) {
         when={props.recap?.loading}
         fallback={
           <Show when={props.recap?.text} fallback={<text fg={props.context.theme.text.muted}>Nothing yet</text>}>
-            <text wrapMode="word" fg={props.context.theme.text.base}>
+            <text wrapMode="word" fg={props.context.theme.text.muted}>
               {props.recap?.text}
             </text>
           </Show>
