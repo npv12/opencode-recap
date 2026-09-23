@@ -30,7 +30,7 @@ A session recap for the [OpenCode](https://opencode.ai) V2 TUI. A persistent **R
 - Generation is a read-only side request — nothing ever enters your transcript.
 - The trigger state resets on every recap, on dismissal, and on restart, so recaps only happen in response to real activity.
 
-By default, recaps use a dedicated model (`openai/gpt-5.6-luna`) with an explicitly attached transcript. If that model or endpoint is unavailable, recap generation fails rather than using the active session model.
+By default, recaps use a dedicated model (`openai/gpt-6-luna`) with an explicitly attached transcript. If that model or endpoint is unavailable, recap generation fails rather than using the active session model.
 
 ## Requirements
 
@@ -58,7 +58,7 @@ Options go in the object form of a plugin entry, in `cli.json` (TUI config) or `
 | Option    | Type     | Default            | Description                                    |
 | --------- | -------- | ------------------ | ---------------------------------------------- |
 | `providerID` | `string` | `"openai"`       | Provider for side-request recaps               |
-| `modelID`    | `string` | `"gpt-5.6-luna"` | Model for side-request recaps                  |
+| `modelID`    | `string` | `"gpt-6-luna"` | Model for side-request recaps                  |
 
 ```jsonc
 {

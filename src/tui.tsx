@@ -48,7 +48,7 @@ export function autoRecapDue(
   return nowMs - state.anchorAtMs >= AUTO_RECAP_INTERVAL_MS;
 }
 
-const DEFAULT_RECAP_MODEL = { providerID: "openai", id: "gpt-5.6-luna", variant: "none" } as const;
+const DEFAULT_RECAP_MODEL = { providerID: "openai", id: "gpt-6-luna", variant: "none" } as const;
 const RECAP_TIMEOUT_MS = 60_000;
 const AUTO_RETRY_COOLDOWN_MS = 2 * 60 * 1_000;
 const AUTO_MAX_CONSECUTIVE_FAILURES = 3;
@@ -59,7 +59,7 @@ const RECAP_MAX_CHARS = 480;
 export type RecapOptions = {
   /** Provider used for side-request recaps (default: openai). */
   providerID?: string;
-  /** Model used for side-request recaps (default: gpt-5.6-luna). */
+  /** Model used for side-request recaps (default: gpt-6-luna). */
   modelID?: string;
 };
 
