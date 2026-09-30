@@ -22,10 +22,10 @@ A session recap for the [OpenCode](https://opencode.ai) V2 TUI. A persistent **R
 ## How it works
 
 - **Click the Recap header** (or run **Generate session recap** from `ctrl+p`) to generate immediately.
+- Each recap summarizes only what the agent has produced **since the previous recap**, so it describes new work rather than restating the session.
 - Recaps refresh automatically when **any** of these happen since the last recap:
-  - **3 minutes** elapse (counted from the last recap, or from startup) with at least one new message exchanged,
-  - **3 new user messages** arrive, or
-  - **20 assistant turns** complete.
+  - **10,000 characters** of agent output (reasoning and answers) have accumulated, or
+  - **3 minutes** have elapsed with the agent working.
 - Recaps fire **mid-turn too**: a long-running agent gets its progress summarized while it works, without waiting for the turn to end.
 - Generation is a read-only side request — nothing ever enters your transcript.
 - The trigger state resets on every recap, on dismissal, and on restart, so recaps only happen in response to real activity.
@@ -115,8 +115,8 @@ For local publishing instead, use `npm publish` as usual; the same provenance se
 Implementation notes for contributors:
 
 - The entry file is deliberately self-contained; OpenCode's hot-reloader cache-busts only the entrypoint, so relative imports can load stale.
-- Auto-trigger state lives in memory and is driven entirely by events (`session.inbox.enqueued`, `session.step.ended`). Never derive counts from `message.list()` — it's a paginated cache, not full history.
-- Failures back off exponentially-ish: 2-minute cooldown per failed attempt, auto disabled after 3 consecutive failures until the next message.
+- Trigger state lives in memory and is driven by one event, `session.step.ended`. The character count is a forward-only sum from a part-level cursor over `message.list()`, which is a paginated cache rather than full history: never re-derive totals from it, and never key a position on a message id, because one assistant message spans several steps and each appends parts. Every step is followed by one deferred re-read, since the cache can lag the event on parts as well as on messages.
+- There is no failure breaker. A failed recap leaves the previous text alone and needs the next 10,000 characters to retry, so a threshold crossing is its own rate limit.
 
 ## License
 
