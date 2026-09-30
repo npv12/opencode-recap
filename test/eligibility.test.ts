@@ -7,7 +7,7 @@ type Message = Parameters<typeof recapTranscript>[0][number];
 
 const START = 1_000_000;
 
-const assistant = (id: string, parts: Array<{ type: string; text: string }>, created = 0) => ({
+const assistant = (id: string, parts: NonNullable<Message["content"]>, created = 0) => ({
   id,
   type: "assistant",
   time: { created },
@@ -100,7 +100,7 @@ test("the window starts at the anchor's part, not after the anchor message", () 
   ]);
   expect(recapTranscript([message], { id: "msg_1", part: 1 })).toEqual({
     text: "Thinking: still new",
-    through: { id: "msg_1", part: 2 },
+    through: { id: "msg_1", part: 2, offsets: ["already summarized".length, "still new".length] },
   });
 });
 
@@ -108,7 +108,7 @@ test("a pre-part-level anchor consumes its whole message", () => {
   const messages = [assistant("msg_1", [{ type: "text", text: "old" }]), assistant("msg_2", [{ type: "text", text: "new" }])];
   const { text, through } = recapTranscript(messages, { id: "msg_1", part: Number.MAX_SAFE_INTEGER });
   expect(text).toBe("Assistant: new");
-  expect(through).toEqual({ id: "msg_2", part: 1 });
+  expect(through).toEqual({ id: "msg_2", part: 1, offsets: [3] });
 });
 
 test("reasoning is kept in part order, labelled apart from answers", () => {
@@ -123,7 +123,7 @@ test("reasoning is kept in part order, labelled apart from answers", () => {
   ).toBe("Thinking: locating the parser\n\nAssistant: reading the file\n\nThinking: patching the branch");
 });
 
-test("tool parts and blank parts contribute nothing", () => {
+test("tool parts without stable inputs and blank parts contribute nothing", () => {
   expect(recapTranscript([assistant("msg_1", [{ type: "tool", text: "bash ls" }])])).toEqual({});
   expect(recapTranscript([assistant("msg_1", [{ type: "text", text: "  " }])])).toEqual({});
   expect(recapTranscript([])).toEqual({});
@@ -137,10 +137,10 @@ test("user messages are inside the window", () => {
 test("an over-long part is capped and an over-long user message too", () => {
   const big = "x".repeat(5_000);
   const { text } = recapTranscript([assistant("msg_1", [{ type: "reasoning", text: big }]), user("msg_2", "y".repeat(67_000))]);
-  expect(text?.startsWith("Thinking: " + "x".repeat(3_999))).toBe(true);
-  expect(text?.includes("x".repeat(4_000))).toBe(false);
-  expect(text?.includes("y".repeat(2_000))).toBe(false);
-  expect(text?.includes("y".repeat(1_999))).toBe(true);
+  expect(text?.startsWith("Thinking: " + "x".repeat(3_997) + "...")).toBe(true);
+  expect(text?.includes("x".repeat(3_998))).toBe(false);
+  expect(text?.includes("y".repeat(1_998))).toBe(false);
+  expect(text?.includes("y".repeat(1_997) + "...")).toBe(true);
 });
 
 test("an over-cap transcript keeps its head and its tail", () => {
@@ -153,7 +153,7 @@ test("an over-cap transcript keeps its head and its tail", () => {
   // The window's opening survives, and so does its most recent end.
   expect(text?.startsWith("Assistant: 0")).toBe(true);
   expect(text?.endsWith("39".repeat(2_000).slice(-50))).toBe(true);
-  expect(text).toContain("…");
+  expect(text).toContain("...");
 });
 
 test("the manual path falls back to the whole cache, the automatic path does not", () => {
@@ -179,10 +179,100 @@ test("an automatic window never re-reports content the anchor consumed", () => {
 
 test("through matches the position reached", () => {
   const messages = [user("msg_1", "go"), assistant("msg_2", [{ type: "text", text: "a" }, { type: "text", text: "b" }])];
-  expect(recapTranscript(messages).through).toEqual({ id: "msg_2", part: 2 });
+  expect(recapTranscript(messages).through).toEqual({ id: "msg_2", part: 2, offsets: [1, 1] });
   // A message with no contributable part never becomes the position reached.
   expect(recapTranscript([assistant("msg_1", [{ type: "tool", text: "bash" }]), user("msg_2", "hi")]).through).toEqual({
     id: "msg_2",
     part: 0,
+    offsets: [],
   });
 });
+
+test("counting picks up growth in every snapshotted part", () => {
+  const message = assistant("msg_1", [
+    { type: "reasoning", text: "abcghi" },
+    { type: "text", text: "defjkl" },
+    { type: "text", text: "mn" },
+  ]);
+  expect(outputChars([message], { id: "msg_1", part: 2, offsets: [3, 3] })).toBe(8);
+  expect(outputChars([message], { id: "msg_1", part: 3, offsets: [6, 6, 2] })).toBe(0);
+});
+
+test("a transcript resumes within several growing parts without repeating their prefixes", () => {
+  const message = assistant("msg_1", [
+    { type: "reasoning", text: "abc" },
+    { type: "text", text: "def" },
+  ]);
+  const first = recapTranscript([message]);
+  message.content[0]!.text += "ghi";
+  message.content[1]!.text += "jkl";
+  expect(first.through).toEqual({ id: "msg_1", part: 2, offsets: [3, 3] });
+  expect(recapTranscript([message], first.through)).toEqual({
+    text: "Thinking: ghi\n\nAssistant: jkl",
+    through: { id: "msg_1", part: 2, offsets: [6, 6] },
+  });
+});
+
+test("tool inputs are included once, but output, errors, and metadata are excluded", () => {
+  const part = {
+    type: "tool",
+    name: "read",
+    state: {
+      status: "completed",
+      input: { path: "src/index.ts", limit: 20 },
+      content: [{ type: "text", text: "EXCLUDED_TOOL_OUTPUT" }],
+      metadata: { note: "EXCLUDED_TOOL_METADATA" },
+      error: "EXCLUDED_TOOL_ERROR",
+    },
+  };
+  const message = assistant("msg_1", [part]);
+  const result = recapTranscript([message]);
+  expect(result.text).toBe('Tool input: read: {"path":"src/index.ts","limit":20}');
+  expect(result.text).not.toContain("EXCLUDED_TOOL");
+  expect(recapTranscript([message], result.through)).toEqual({});
+  expect(outputChars([message], { id: "msg_1", part: 0 })).toBe(0);
+});
+
+test("streaming tool input is deferred until its parsed object is available", () => {
+  const message = assistant("msg_1", [
+    { type: "text", text: "Reading the entry." },
+    { type: "tool", name: "read", state: { status: "streaming", input: '{"path":' } },
+  ]);
+  const first = recapTranscript([message]);
+  expect(first.text).toBe("Assistant: Reading the entry.");
+  expect(first.through?.offsets).toEqual(["Reading the entry.".length, 0]);
+  message.content[1]!.state = { status: "running", input: { path: "src/index.ts" } };
+  const next = recapTranscript([message], first.through);
+  expect(next.text).toBe('Tool input: read: {"path":"src/index.ts"}');
+  expect(recapTranscript([message], next.through)).toEqual({});
+});
+
+test("positions record raw lengths rather than clipped transcript lengths", () => {
+  const message = assistant("msg_1", [{ type: "reasoning", text: "x".repeat(5_000) }]);
+  const first = recapTranscript([message]);
+  expect(first.through?.offsets).toEqual([5_000]);
+  message.content[0]!.text += "New result.";
+  expect(recapTranscript([message], first.through).text).toBe("Thinking: New result.");
+});
+
+test("tool inputs use the same per-block cap", () => {
+  const message = assistant("msg_1", [{
+    type: "tool",
+    name: "write",
+    state: { status: "running", input: { content: "x".repeat(10_000) } },
+  }]);
+  const result = recapTranscript([message]);
+  expect(result.text?.length).toBe("Tool input: ".length + 4_000);
+  expect(result.text?.endsWith("...")).toBe(true);
+  expect(result.through?.offsets?.[0]).toBeGreaterThan(10_000);
+});
+
+test.each([0, 1, 2, 3, 4, 99, 100, 4_000, 4_001, 4_003, 4_004, 24_000])(
+  "transcript respects a %i-character maximum",
+  (maxChars) => {
+    const messages = Array.from({ length: 10 }, (_, i) => assistant(`msg_${i}`, [{ type: "text", text: "x".repeat(5_000) }]));
+    const result = recapTranscript(messages, undefined, maxChars);
+    expect(result.text!.length).toBeLessThanOrEqual(maxChars);
+    expect(result.through).toEqual({ id: "msg_9", part: 1, offsets: [5_000] });
+  },
+);

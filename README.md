@@ -23,6 +23,7 @@ A session recap for the [OpenCode](https://opencode.ai) V2 TUI. A persistent **R
 
 - **Click the Recap header** (or run **Generate session recap** from `ctrl+p`) to generate immediately.
 - Each recap summarizes only what the agent has produced **since the previous recap**, so it describes new work rather than restating the session.
+- The latest previous recap is included as context. Tool names and parsed inputs describe requested actions; tool outputs are excluded.
 - Recaps refresh automatically when **any** of these happen since the last recap:
   - **10,000 characters** of agent output (reasoning and answers) have accumulated, or
   - **3 minutes** have elapsed with the agent working.
@@ -31,6 +32,10 @@ A session recap for the [OpenCode](https://opencode.ai) V2 TUI. A persistent **R
 - The trigger state resets on every recap, on dismissal, and on restart, so recaps only happen in response to real activity.
 
 By default, recaps use a dedicated model (`openai/gpt-6-luna`) with an explicitly attached transcript. If that model or endpoint is unavailable, recap generation fails rather than using the active session model.
+
+The plugin selects Luna explicitly, so no global `model` setting is required. The sessionless endpoint uses the server's base configuration: the selected provider/model must be available there, and project-only provider customizations do not apply. Luna uses its `none` variant; custom model selections use their model's default variant.
+
+Failures show their reason in the panel while keeping the last displayed recap.
 
 ## Requirements
 
@@ -48,6 +53,8 @@ Add the package to your `opencode.jsonc`:
 ```
 
 and restart OpenCode.
+
+The server entry is a no-op; OpenCode automatically loads the `./tui` entry. For a CLI-only installation, put the same plugin entry in `~/.config/opencode/cli.json` instead.
 
 > **Note:** OpenCode V2 is under active development. If the plugin fails to render when installed from npm, load it from source instead (see below) — local files are processed by OpenCode's runtime transforms, which is more forgiving of version drift.
 
@@ -108,15 +115,20 @@ Publishing is automated: pushing a GitHub release publishes the matching version
 
 1. Bump `version` in `package.json` and commit.
 2. One-time setup on [npmjs.com](https://www.npmjs.com): package settings → **Trusted Publisher** → GitHub Actions → owner `npv12`, repository `opencode-recap`, workflow filename `publish.yml`. Requires npm CLI ≥ 11.5.1 (the workflow runs Node 24 and upgrades npm).
-3. Create a GitHub release tagged `v<version>` (e.g. `v0.1.0`). The [`publish.yml`](.github/workflows/publish.yml) workflow verifies the tag matches the package version, typechecks, tests, builds, and publishes via OIDC — no token secrets involved.
+3. Create a GitHub release tagged `v<version>` (e.g. `v0.1.0`). The [`publish.yml`](.github/workflows/publish.yml) workflow checks out that tag, verifies its package version, typechecks, tests, builds, and publishes via OIDC. It does not change the version or push a commit.
 
 For local publishing instead, use `npm publish` as usual; the same provenance settings apply from a supported CI only.
 
 Implementation notes for contributors:
 
 - The entry file is deliberately self-contained; OpenCode's hot-reloader cache-busts only the entrypoint, so relative imports can load stale.
-- Trigger state lives in memory and is driven by one event, `session.step.ended`. The character count is a forward-only sum from a part-level cursor over `message.list()`, which is a paginated cache rather than full history: never re-derive totals from it, and never key a position on a message id, because one assistant message spans several steps and each appends parts. Every step is followed by one deferred re-read, since the cache can lag the event on parts as well as on messages.
-- There is no failure breaker. A failed recap leaves the previous text alone and needs the next 10,000 characters to retry, so a threshold crossing is its own rate limit.
+- Trigger state lives in memory and is driven by `session.step.ended`, followed by one 250 ms re-read. The host updates its cache before the step handler; the deferred read may also see the next step's growing parts.
+- Counting cursors and durable anchors record a message, part count, and raw per-part character offsets. This keeps later growth eligible even in earlier parts. Legacy anchors without offsets still consume whole parts. The message cache is paginated, not full history.
+- Only reasoning and answer characters count toward the 10,000-character trigger. Parsed tool inputs can produce an elapsed-trigger recap, but their size cannot trip the character threshold. Streaming raw JSON inputs wait until parsed.
+- Output blocks and tool inputs are capped at 4,000 characters; user messages and compaction summaries at 2,000. The total transcript keeps a 4,000-character head plus a tail within 24,000 characters. Clipped material is retired, so these are content trade-offs, not a guarantee that every action is described.
+- There is no failure breaker. Automatic retries need another 10,000 output characters or an elapsed three minutes of activity; manual requests bypass those thresholds. Empty automatic deltas make no model call, while manual requests can fall back to the cached history.
+- Manual generation can cause an identical-transcript follow-up if a step counts the same output during that request. Durable anchors are shared across TUI instances, and an older completion can overwrite a newer anchor. Both behaviors are intentionally accepted.
+- `bun run test` loads the Solid transform so the tests mount the actual controller and run its lifecycle hooks.
 
 ## License
 
