@@ -113,9 +113,9 @@ npm publish     # prepack builds automatically
 
 Publishing is automated: pushing a GitHub release publishes the matching version to npm with provenance attestations.
 
-1. Bump `version` in `package.json` and commit.
+1. Push the plugin changes to `main`. No manual version bump is needed.
 2. One-time setup on [npmjs.com](https://www.npmjs.com): package settings → **Trusted Publisher** → GitHub Actions → owner `npv12`, repository `opencode-recap`, workflow filename `publish.yml`. Requires npm CLI ≥ 11.5.1 (the workflow runs Node 24 and upgrades npm).
-3. Create a GitHub release tagged `v<version>` (e.g. `v0.1.0`). The [`publish.yml`](.github/workflows/publish.yml) workflow checks out that tag, verifies its package version, typechecks, tests, builds, and publishes via OIDC. It does not change the version or push a commit.
+3. Create a GitHub release tagged `v<version>` (e.g. `v0.5.0`). The [`publish.yml`](.github/workflows/publish.yml) workflow checks out `main`, sets the package version from the tag, typechecks, tests, builds, and publishes via OIDC. After publication, it commits and pushes the version bump when needed. The published source follows `main`, not the tag snapshot.
 
 For local publishing instead, use `npm publish` as usual; the same provenance settings apply from a supported CI only.
 
